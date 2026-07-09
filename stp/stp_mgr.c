@@ -1866,7 +1866,8 @@ static void stpmgr_process_vlan_mem_config_msg(void *msg)
 static void stpmgr_process_ipc_msg(STP_IPC_MSG *msg, int len, struct sockaddr_un client_addr)
 {
     int ret;
-    STP_LOG_INFO("rcvd %s msg type", msgtype_str[msg->msg_type]);
+
+    STP_LOG_INFO("rcvd %s msg type proto_mode %d", msgtype_str[msg->msg_type], msg->proto_mode);
 
     /* Temp code until warm boot is handled */
     if(msg->msg_type != STP_INIT_READY && msg->msg_type != STP_STPCTL_MSG)
@@ -1899,43 +1900,65 @@ static void stpmgr_process_ipc_msg(STP_IPC_MSG *msg, int len, struct sockaddr_un
         }
         case STP_BRIDGE_CONFIG:
         {
-            stpmgr_process_bridge_config_msg(msg->data);
-            /*if(msg->proto_mode == L2_PVSTP)
+            if(msg->proto_mode == L2_PVSTP)
             {
                 stpmgr_process_bridge_config_msg(msg->data);
             }
             else if(msg->proto_mode == L2_MSTP)
             {
                 mstpmgr_process_bridge_config_msg(msg->data);
-            }*/
+            } else
+            {
+                STP_LOG_ERR("Invalid proto_mode %d", msg->proto_mode);
+            }
             break;
         }
         case STP_VLAN_CONFIG:
         {
-            stpmgr_process_vlan_config_msg(msg->data);
+            if(msg->proto_mode == L2_PVSTP)
+            {
+                stpmgr_process_vlan_config_msg(msg->data);
+            } else
+            {
+                STP_LOG_ERR("Invalid proto_mode %d", msg->proto_mode);
+            }
             break;
         }
         case STP_VLAN_PORT_CONFIG:
         {
-            stpmgr_process_vlan_intf_config_msg(msg->data);
+            if(msg->proto_mode == L2_PVSTP)
+            {
+                stpmgr_process_vlan_intf_config_msg(msg->data);
+            } else
+            {
+                STP_LOG_ERR("Invalid proto_mode %d", msg->proto_mode);
+            }
             break;
         }
         case STP_PORT_CONFIG:
         {
-            stpmgr_process_intf_config_msg(msg->data);
-            /*if(msg->proto_mode == L2_PVSTP)
+            if(msg->proto_mode == L2_PVSTP)
             {
                 stpmgr_process_intf_config_msg(msg->data);
             }
             else if(msg->proto_mode == L2_MSTP)
             {
                 mstpmgr_process_intf_config_msg(msg->data);
-            }*/
+            } else
+            {
+                STP_LOG_ERR("Invalid proto_mode %d", msg->proto_mode);
+            }
             break;
         }
         case STP_VLAN_MEM_CONFIG:
         {
-            stpmgr_process_vlan_mem_config_msg(msg->data);
+            if(msg->proto_mode == L2_PVSTP)
+            {
+                stpmgr_process_vlan_mem_config_msg(msg->data);
+            } else
+            {
+                STP_LOG_ERR("Invalid proto_mode %d", msg->proto_mode);
+            }
             break;
         }
         case STP_STPCTL_MSG:
@@ -1948,6 +1971,9 @@ static void stpmgr_process_ipc_msg(STP_IPC_MSG *msg, int len, struct sockaddr_un
             else if (STP_IS_PROTOCOL_ENABLED(L2_MSTP))
             {
                 mstpdbg_process_ctl_msg(msg->data);
+            } else
+            {
+                STP_LOG_ERR("Invalid proto_mode %d", msg->proto_mode);
             }
             stpmgr_send_reply(client_addr, (void *)msg, len);
             break;
