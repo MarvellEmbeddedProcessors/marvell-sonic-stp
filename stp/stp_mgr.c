@@ -1979,7 +1979,7 @@ static void stpmgr_process_ipc_msg(STP_IPC_MSG *msg, int len, struct sockaddr_un
                 mstpdbg_process_ctl_msg(msg->data);
             } else
             {
-                STP_LOG_ERR("Invalid proto_mode %d", msg->proto_mode);
+                STP_LOG_ERR("No protocol enabled, STP_STPCTL_MSG not processed");
             }
             stpmgr_send_reply(client_addr, (void *)msg, len);
             break;
