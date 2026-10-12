@@ -18,6 +18,9 @@
 #include <net/if.h>
 #include "stp_inc.h"
 
+#ifndef PACKET_IGNORE_OUTGOING
+#define PACKET_IGNORE_OUTGOING 23
+#endif
 
 MAC_ADDRESS bridge_group_address = { 0x0180c200L, 0x0000};
 MAC_ADDRESS pvst_bridge_group_address = { 0x01000cccL, 0xcccd};
@@ -111,6 +114,21 @@ int stp_pkt_sock_create(INTERFACE_NODE *intf_node)
         STP_LOG_ERR("setsock PACKET_AUXDATA  for (%u) Failed, errno : %s"
                 , intf_node->kif_index, strerror(errno));
         sys_assert(0);
+    }
+
+    // Without PACKET_IGNORE_OUTGOING socket option the kernel queues a copy
+    // of every frame sent out of the interface in the socket. The STP code
+    // listening on the socket treats this is an externla BPDU and the port
+    // is put into blocking.
+    val = 1;
+    if (-1 == setsockopt(intf_node->sock,
+                         SOL_PACKET,
+                         PACKET_IGNORE_OUTGOING,
+                         &val,
+                         sizeof(val)))
+    {
+        STP_LOG_ERR("Failed to setsockopt PACKET_IGNORE_OUTGOING %u - errno : %s",
+                    intf_node->kif_index, strerror(errno));
     }
 
     //filter STP/PVST packets only
@@ -314,6 +332,15 @@ void stp_pkt_rx_handler (evutil_socket_t fd, short what, void *arg)
         //Anyway we miss this message, cant do much about that.
         //Instead of parsing the incomplete message return error
         STPD_INCR_PKT_COUNT(intf_node->port_id, pkt_rx_err_trunc);
+        return;
+    }
+
+    // If the kernel delivers a copy of a frame this host just transmitted
+    // to every other PF_PACKET socket on the interface ignore it.
+    if (from.sll_pkttype == PACKET_OUTGOING)
+    {
+        STP_LOG_ERR("Local TX packet looped back on %s port %u len %ld",
+                     intf_node->ifname, intf_node->port_id, packet_len);
         return;
     }
 
